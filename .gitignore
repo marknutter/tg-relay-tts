@@ -1,0 +1,4 @@
+.venv/
+.venv-chatterbox/
+__pycache__/
+**/*.pyc

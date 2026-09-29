@@ -1,16 +1,19 @@
 # tg-relay-tts
 
-Optional Python sidecar that gives the tg-relay daemon voice-reply capability.
-Runs a persistent local HTTP service on `127.0.0.1:8077` that synthesizes text
-using a cloned reference voice.
+Standalone Python voice-synthesis service. Runs a persistent local HTTP
+service on `127.0.0.1:8077` that synthesizes text using a cloned reference
+voice.
 
-The core tg-relay daemon is unaware of this sidecar until it's installed. If the
-sidecar isn't running, voice replies gracefully fall back to text. You can
-install it per-machine depending on whether you want voice-out there.
+**Moved out of `~/Code/tg-relay` on 2026-09-29** (issue tg-relay#105) into its
+own repo — it had already outgrown that name. Both **tg-relay** (the Telegram
+daemon's `reply` tool) and **Pulse** (`~/Code/pulse`) post to the same
+`/synthesize` endpoint as independent, unaware-of-each-other callers. The
+internal naming (service unit, env vars, log file, cache dir) still says
+"tg-relay" — that was a deliberate choice at move time to keep the change
+low-risk, not an oversight. Treat the HTTP contract as public — changing it
+breaks whichever consumer isn't in front of you right now.
 
-It is no longer only the daemon's: **Pulse** (`~/Code/pulse`) posts to the same
-`/synthesize` endpoint. Treat the HTTP contract as public — changing it breaks a
-second consumer that won't be obvious from this directory.
+If the sidecar isn't running, callers gracefully fall back to text.
 
 ## Engines
 
@@ -30,8 +33,8 @@ picks the interpreter matching the engine:
 
 | Engine | Virtualenv | Requirements |
 |---|---|---|
-| `chatterbox` | `tts/.venv-chatterbox` | `requirements-chatterbox.txt` |
-| `f5` | `tts/.venv` | `requirements.txt` |
+| `chatterbox` | `.venv-chatterbox` | `requirements-chatterbox.txt` |
+| `f5` | `.venv` | `requirements.txt` |
 
 ### Measured on nixbox (RTX 3070, 8 GB), 2026-09-18
 
@@ -74,7 +77,6 @@ runs on CPU.
 ## Install
 
 ```bash
-cd tts
 uv venv --python 3.11 .venv-chatterbox
 uv pip install --python .venv-chatterbox/bin/python -r requirements-chatterbox.txt
 ```
@@ -266,7 +268,7 @@ curl -s -X POST http://127.0.0.1:8077/synthesize \
 Point the unit at the other venv and engine, then restart:
 
 ```
-ExecStart=.../tts/.venv/bin/python .../tts/server.py
+ExecStart=/home/mark/Code/tg-relay-tts/.venv/bin/python /home/mark/Code/tg-relay-tts/server.py
 Environment=TG_RELAY_TTS_ENGINE=f5
 ```
 
