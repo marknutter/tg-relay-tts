@@ -2,7 +2,7 @@
 tg-relay-tts sidecar — voice synthesis HTTP server.
 
 Runs as a persistent local service. The tg-relay daemon POSTs text here when
-Claude chooses to reply by voice, and Pulse (~/.pulse/config.json) posts to the
+Claude chooses to reply by voice, and Chihiro (~/.chihiro/config.json) posts to the
 same endpoint. Returns synthesized WAV bytes for the caller to wrap however it
 likes (the daemon turns them into an ogg/opus Telegram voice note).
 
@@ -112,7 +112,12 @@ def chunk_text(text: str, max_chars: int = 250) -> list[str]:
 HOME = Path.home()
 CHANNELS_ROOT = HOME / ".claude" / "channels"
 GLOBAL_REF_DIR = HOME / ".cache" / "tg-relay-tts"
-PULSE_VOICES_DIR = HOME / ".pulse" / "voices"
+# Chihiro's voice clips. Chihiro was called Chihiro and kept them in ~/.chihiro/voices; its daemon moves
+# that directory to ~/.chihiro and leaves a link, so the old path is only a fallback for a machine
+# that has not run the new daemon yet.
+CHIHIRO_VOICES_DIR = HOME / ".chihiro" / "voices"
+if not CHIHIRO_VOICES_DIR.exists() and (HOME / ".pulse" / "voices").exists():
+    CHIHIRO_VOICES_DIR = HOME / ".pulse" / "voices"
 
 ENGINE_NAME = os.environ.get("TG_RELAY_TTS_ENGINE", "chatterbox").strip().lower()
 
@@ -412,7 +417,7 @@ threading.Thread(target=_idle_restart_loop, daemon=True, name="tts-idle-restart"
 def resolve_reference(voice_or_channel: str | None, need_text: bool) -> tuple[Path, str | None] | None:
     """Return (ref_audio_path, ref_text_or_None) for a voice or channel, or None.
 
-    If a specific voice/channel is requested, searches ~/.pulse/voices and
+    If a specific voice/channel is requested, searches ~/.chihiro/voices and
     ~/.claude/channels. If it cannot be resolved, returns None (causing 404).
     Crucially, it does NOT silently fall back to GLOBAL_REF_DIR when a specific
     voice was requested.
@@ -428,19 +433,19 @@ def resolve_reference(voice_or_channel: str | None, need_text: bool) -> tuple[Pa
                 return wav, text
         return None
 
-    # 1. Direct clip in Pulse voices: ~/.pulse/voices/<name>.wav
-    if PULSE_VOICES_DIR.exists():
-        direct_wav = PULSE_VOICES_DIR / f"{voice_or_channel}.wav"
+    # 1. Direct clip in Chihiro voices: ~/.chihiro/voices/<name>.wav
+    if CHIHIRO_VOICES_DIR.exists():
+        direct_wav = CHIHIRO_VOICES_DIR / f"{voice_or_channel}.wav"
         if direct_wav.exists():
-            txt = PULSE_VOICES_DIR / f"{voice_or_channel}.txt"
+            txt = CHIHIRO_VOICES_DIR / f"{voice_or_channel}.txt"
             text = txt.read_text(encoding="utf-8").strip() if txt.exists() else None
             if not (need_text and text is None):
                 return direct_wav, text
 
     # 2. Directory-based candidates
     candidates = []
-    if PULSE_VOICES_DIR.exists():
-        candidates.append(PULSE_VOICES_DIR / voice_or_channel)
+    if CHIHIRO_VOICES_DIR.exists():
+        candidates.append(CHIHIRO_VOICES_DIR / voice_or_channel)
     candidates.append(CHANNELS_ROOT / f"telegram-{voice_or_channel}")
     if voice_or_channel.startswith("telegram-"):
         candidates.append(CHANNELS_ROOT / voice_or_channel)
@@ -476,7 +481,7 @@ def load_channel_config(channel: str | None) -> dict:
         bases.extend([
             CHANNELS_ROOT / f"telegram-{channel}",
             CHANNELS_ROOT / channel,
-            PULSE_VOICES_DIR / channel,
+            CHIHIRO_VOICES_DIR / channel,
         ])
     for base in bases:
         cfg_path = base / "tts.json"
@@ -496,14 +501,14 @@ def apply_output_sr(samples, sr: int):
 
     Diagnostic, off by default. Both engines emit 24 kHz, which is a perfectly
     normal rate for speech, and every consumer here has handled it for months.
-    It exists because Pulse's iOS client plays this audio through an
+    It exists because Chihiro's iOS client plays this audio through an
     AVAudioEngine graph wired at the *clip's* format, with an
     AVAudioUnitTimePitch in the chain, and hands it to hardware that runs at
     48 kHz. A rate mismatch across that boundary is the classic cause of
     audio that plays back pitch-shifted and slurred, which is exactly what
-    Pulse is doing while the identical bytes play clean everywhere else.
+    Chihiro is doing while the identical bytes play clean everywhere else.
 
-    Setting this to 48000 makes the server hand Pulse its native rate, which
+    Setting this to 48000 makes the server hand Chihiro its native rate, which
     either fixes it — confirming the diagnosis and pointing the real fix at
     the client's graph — or does not, which rules the theory out for the cost
     of one retry. Either outcome is worth more than more reading.
@@ -572,12 +577,12 @@ def health():
 
 @app.get("/voices")
 def list_voices():
-    """List available voices discovered from ~/.pulse/voices and ~/.claude/channels."""
+    """List available voices discovered from ~/.chihiro/voices and ~/.claude/channels."""
     voices: set[str] = set()
-    if PULSE_VOICES_DIR.exists():
-        for p in PULSE_VOICES_DIR.glob("*.wav"):
+    if CHIHIRO_VOICES_DIR.exists():
+        for p in CHIHIRO_VOICES_DIR.glob("*.wav"):
             voices.add(p.stem)
-        for p in PULSE_VOICES_DIR.iterdir():
+        for p in CHIHIRO_VOICES_DIR.iterdir():
             if p.is_dir() and (p / "reference.wav").exists():
                 voices.add(p.name)
     if CHANNELS_ROOT.exists():

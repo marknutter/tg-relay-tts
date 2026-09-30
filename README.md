@@ -6,7 +6,7 @@ voice.
 
 **Moved out of `~/Code/tg-relay` on 2026-09-29** (issue tg-relay#105) into its
 own repo — it had already outgrown that name. Both **tg-relay** (the Telegram
-daemon's `reply` tool) and **Pulse** (`~/Code/pulse`) post to the same
+daemon's `reply` tool) and **Chihiro** (`~/Code/pulse`, the repo formerly called Pulse) post to the same
 `/synthesize` endpoint as independent, unaware-of-each-other callers. The
 internal naming (service unit, env vars, log file, cache dir) still says
 "tg-relay" — that was a deliberate choice at move time to keep the change
